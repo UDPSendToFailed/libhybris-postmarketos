@@ -1,0 +1,46 @@
+#!/sbin/openrc-run
+description="Android/Halium LXC container"
+
+depend() {
+	need localmount sysfs cgroups
+	after firewall net
+}
+
+start() {
+
+	ebegin "Preparing Android mounts"
+	
+	mkdir -p /android/system
+	mount -o rw /var/lib/lxc/android/system.img /android/system
+
+	mkdir -p /system
+	mount -o bind android/system/system /system
+
+	mkdir -p /apex/com.android.runtime
+	mount -o bind android/system/system/apex/com.android.runtime.debug /apex/com.android.runtime
+	
+	mkdir -p /android/system/vendor
+	mount -o ro /dev/mmcblk0p42 /vendor
+	mount -o ro /dev/mmcblk0p37 /vendor/firmware-modem
+	mount -o ro /dev/mmcblk0p38 /vendor/firmware_mnt
+
+	eend $?
+
+	ebegin "Starting Halium LXC container"
+	lxc-start -d -n android
+	eend $?
+}
+
+stop() {
+	ebegin "Stopping Halium LXC container"
+	lxc-stop -n android -k
+	eend $?
+
+	ebegin "Unmounting Android filesystems"
+	umount -l /vendor/firmware-modem 2>/dev/null || true
+	umount -l /vendor/firmware_mnt 2>/dev/null || true
+	umount -l /vendor 2>/dev/null || true
+	umount -l /apex/com.android.runtime 2>/dev/null || true
+	umount -l /android/system 2>/dev/null || true
+	eend $?
+}

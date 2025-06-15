@@ -1,0 +1,39 @@
+pkgname=lxc-android
+pkgver=1.0
+pkgrel=0
+pkgdesc="Configuration for starting Halium 10 GSI inside an LXC container"
+arch="aarch64"
+url="https://postmarketos.org"
+license="Apache-2.0"
+depends="lxc shadow" # lxc for containerization, shadow for user/group tools
+install="$pkgname.post-install"
+options="!check"
+source="
+	lxc-android.initd
+	lxc-android.conf
+	mount-android.sh
+	add-android-groups.sh
+"
+
+package() {
+	# Install the LXC container configuration
+	install -dm755 "$pkgdir"/var/lib/lxc/android
+	install -m644 "$srcdir"/lxc-android.conf "$pkgdir"/var/lib/lxc/android/config
+	install -m755 "$srcdir"/mount-android.sh "$pkgdir"/var/lib/lxc/android/mount-android.sh
+
+	# Install the OpenRC service
+	install -dm755 "$pkgdir"/etc/init.d
+	install -m755 "$srcdir"/lxc-android.initd "$pkgdir"/etc/init.d/lxc-android
+
+	# Install the script for creating Android groups
+	install -dm755 "$pkgdir"/usr/sbin
+	install -m755 "$srcdir"/add-android-groups.sh "$pkgdir"/usr/sbin/add-android-groups
+
+}
+
+sha512sums="
+f71d379011a5f058eed9a86279c8530aa3f9fbe0cf53b3c050687bc22a11c9269904a80a37ff2e251755bf52270c1b565723567e57133c9e28ee6f24c8cb9fb1  lxc-android.initd
+d0a344d5ae8d2f9dfe454804555b5ec1518e223482c7b6ad526806f567fa17936e1b4420101a242cfac71d859ef74e25e9aefd690b04b6d5eda8f624b5086617  lxc-android.conf
+20d6e99352ef56539cd870d0fbf67c3ec348a4e8344c989d1a3e505aa7814ffae5822a4e9bf30970c2769d8bb262e55335ef86f137d9e3b82b489d6298b229e1  mount-android.sh
+0cc433c14740d711721bf27971a7d6d2c372438e4b54fcf38ef7a8aa56fb2fcdf43a865d0ca8cadd748fb0da53bd179212212d6eb18146fb8db70e3971ef1b9c  add-android-groups.sh
+"

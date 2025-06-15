@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# Create all necessary Android system groups and users
+/usr/sbin/add-android-groups
+
+# Add the main postmarketOS user to essential graphics/input groups
+username=$(getent passwd 10000 | cut -d ":" -f 1)
+if [ -n "$username" ]; then
+	echo "Adding $username to android groups"
+	usermod -a -G aid_graphics,aid_input,aid_audio "$username"
+fi
+
+# Enable the cgroups and lxc-android services to start on boot
+rc-update add cgroups default
+rc-update add lxc-android default
+
+echo "lxc-android setup complete. Please reboot for all changes to take effect."

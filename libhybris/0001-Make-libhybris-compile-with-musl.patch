@@ -1,0 +1,1249 @@
+commit 77002515dd926a459299563465e5e27fddb8118d
+Author: UDPSendToFailed <udpsendtofailed@gmail.com>
+Date:   Tue Jun 10 00:44:12 2025 +0200
+
+    Hax to fix build for postmarketOS
+
+diff --git a/hybris/common/hooks.c b/hybris/common/hooks.c
+index 40b5cc5..360e132 100644
+--- a/hybris/common/hooks.c
++++ b/hybris/common/hooks.c
+@@ -80,6 +80,10 @@ extern int my_property_list(void (*propfn)(const char *key, const char *value, v
+ 
+ #include <hybris/common/hooks.h>
+ 
++#ifndef __GLIBC__
++#include <hybris/common/musl_compat.h>
++#endif
++
+ #include <android-config.h>
+ 
+ // this is also used in bionic:
+@@ -554,6 +558,7 @@ static int _hybris_hook_pthread_attr_getstacksize(pthread_attr_t const *__attr,
+     return pthread_attr_getstacksize(realattr, stack_size);
+ }
+ 
++#ifdef __GLIBC__
+ static int _hybris_hook_pthread_attr_setstackaddr(pthread_attr_t *__attr, void *stack_addr)
+ {
+     pthread_attr_t *realattr = (pthread_attr_t *) *(uintptr_t *) __attr;
+@@ -571,6 +576,7 @@ static int _hybris_hook_pthread_attr_getstackaddr(pthread_attr_t const *__attr,
+ 
+     return pthread_attr_getstackaddr(realattr, stack_addr);
+ }
++#endif
+ 
+ static int _hybris_hook_pthread_attr_setstack(pthread_attr_t *__attr, void *stack_base, size_t stack_size)
+ {
+@@ -912,7 +918,9 @@ static int _hybris_hook_pthread_cond_destroy(pthread_cond_t *cond)
+          * when it is destroyed and bionic code does not always follow this
+          * requirement. To prevent deadlocks reset the reference count of the
+          * condition variable. */
++#ifdef __GLIBC__
+         realcond->__data.__wrefs = 0;
++#endif
+         ret = pthread_cond_destroy(realcond);
+         free(realcond);
+     }
+@@ -1164,6 +1172,7 @@ static int _hybris_hook_pthread_rwlockattr_getpshared(pthread_rwlockattr_t *__at
+     return pthread_rwlockattr_getpshared(realattr, pshared);
+ }
+ 
++#ifdef __GLIBC__
+ int _hybris_hook_pthread_rwlockattr_setkind_np(pthread_rwlockattr_t *attr, int pref)
+ {
+     pthread_rwlockattr_t *realattr = (pthread_rwlockattr_t *) *(uintptr_t *) attr;
+@@ -1181,6 +1190,7 @@ int _hybris_hook_pthread_rwlockattr_getkind_np(const pthread_rwlockattr_t *attr,
+ 
+     return pthread_rwlockattr_getkind_np(realattr, pref);
+ }
++#endif
+ 
+ /*
+  * pthread_rwlock_* functions
+@@ -1531,10 +1541,14 @@ static int _hybris_hook_fgetpos(FILE *fp, bionic_fpos_t *pos)
+ {
+     TRACE_HOOK("fp %p pos %p", fp, pos);
+ 
++#ifdef __GLIBC__
+     fpos_t my_fpos;
+     int ret = fgetpos(_get_actual_fp(fp), &my_fpos);
+ 
+     *pos = my_fpos.__pos;
++#else
++    int ret = fgetpos(_get_actual_fp(fp), (fpos_t*) pos);
++#endif
+ 
+     return ret;
+ }
+@@ -1542,13 +1556,17 @@ static int _hybris_hook_fgetpos(FILE *fp, bionic_fpos_t *pos)
+ static int _hybris_hook_fgetpos64(FILE *fp, bionic_fpos64_t *pos)
+ {
+     TRACE_HOOK("fp %p pos %p", fp, pos);
+-
++#ifdef __GLIBC__
+     fpos64_t my_fpos;
+     int ret = fgetpos64(_get_actual_fp(fp), &my_fpos);
+ 
+     *pos = my_fpos.__pos;
+ 
+     return ret;
++#else
++    errno = EINVAL;
++    return -1;
++#endif
+ }
+ 
+ static char* _hybris_hook_fgets(char *s, int n, FILE *fp)
+@@ -1646,22 +1664,30 @@ static int _hybris_hook_fsetpos(FILE *fp, const bionic_fpos_t *pos)
+ {
+     TRACE_HOOK("fp %p pos %p", fp, pos);
+ 
++#ifdef __GLIBC__
+     fpos_t my_fpos;
+     my_fpos.__pos = *pos;
+     memset(&my_fpos.__state, 0, sizeof(mbstate_t));
+ 
+     return fsetpos(_get_actual_fp(fp), &my_fpos);
++#else
++    return fsetpos(_get_actual_fp(fp), (const fpos_t*) pos);
++#endif
+ }
+ 
+ static int _hybris_hook_fsetpos64(FILE *fp, const bionic_fpos64_t *pos)
+ {
+     TRACE_HOOK("fp %p pos %p", fp, pos);
+-
++#ifdef __GLIBC__
+     fpos64_t my_fpos;
+     my_fpos.__pos = *pos;
+     memset(&my_fpos.__state, 0, sizeof(mbstate_t));
+ 
+     return fsetpos64(_get_actual_fp(fp), &my_fpos);
++#else
++    errno = EINVAL;
++    return -1;
++#endif
+ }
+ 
+ static long _hybris_hook_ftell(FILE *fp)
+@@ -2027,6 +2053,7 @@ static int _hybris_hook_versionsort(struct bionic_dirent **a,
+     return strverscmp((*a)->d_name, (*b)->d_name);
+ }
+ 
++#ifdef __GLIBC__
+ static int _hybris_hook_scandirat(int fd, const char *dir,
+                       struct bionic_dirent ***namelist,
+                       int (*filter) (const struct bionic_dirent *),
+@@ -2088,6 +2115,7 @@ static int _hybris_hook_scandir(const char *dir,
+ {
+     return _hybris_hook_scandirat(AT_FDCWD, dir, namelist, filter, compar);
+ }
++#endif
+ 
+ static inline void swap(void **a, void **b)
+ {
+@@ -2347,6 +2375,7 @@ int _hybris_hook_open(const char *pathname, int flags, ...)
+     return open(target_path, flags, mode);
+ }
+ 
++#ifdef __GLIBC__
+ /**
+  * Wrap some GCC builtin functions, which don't have any address
+  */
+@@ -2372,6 +2401,7 @@ __THROW int _hybris_hook___snprintf_chk (char *__restrict __s, size_t __n, int _
+ 
+     return ret;
+ }
++#endif
+ 
+ static __thread void *tls_hooks[16];
+ 
+@@ -2491,7 +2521,8 @@ static char* _hybris_hook__gnu_strerror_r(int errnum, char *buf, size_t buf_len)
+ {
+     TRACE_HOOK("errnum %d buf '%s' buf len %zu", errnum, buf, buf_len);
+ 
+-    return strerror_r(errnum, buf, buf_len);
++    strerror_r(errnum, buf, buf_len);
++    return buf;
+ }
+ 
+ static int _hybris_hook_mprotect(void *addr, size_t len, int prot)
+@@ -2557,6 +2588,7 @@ static char* _hybris_hook_setlocale(int category, const char *locale)
+     return setlocale(category, locale);
+ }
+ 
++#ifdef __GLIBC__
+ static void* _hybris_hook_mmap(void *addr, size_t len, int prot,
+                   int flags, int fd, off_t offset)
+ {
+@@ -2572,6 +2604,7 @@ static int _hybris_hook_munmap(void *addr, size_t length)
+ 
+     return munmap(addr, length);
+ }
++#endif
+ 
+ extern size_t strlcat(char *dst, const char *src, size_t siz);
+ extern size_t strlcpy(char *dst, const char *src, size_t siz);
+@@ -2922,7 +2955,9 @@ static struct _hook hooks_common[] = {
+     HOOK_DIRECT_NO_DEBUG(realloc),
+     HOOK_DIRECT_NO_DEBUG(memalign),
+     HOOK_DIRECT_NO_DEBUG(valloc),
++#ifdef __GLIBC__
+     HOOK_DIRECT_NO_DEBUG(pvalloc),
++#endif
+     HOOK_DIRECT(fread),
+     HOOK_DIRECT_NO_DEBUG(getxattr),
+     HOOK_DIRECT(mprotect),
+@@ -2974,8 +3009,10 @@ static struct _hook hooks_common[] = {
+     HOOK_DIRECT_NO_DEBUG(bcopy),
+     HOOK_DIRECT_NO_DEBUG(bzero),
+     HOOK_DIRECT_NO_DEBUG(ffs),
++#ifdef __GLIBC__
+     HOOK_INDIRECT(__sprintf_chk),
+     HOOK_INDIRECT(__snprintf_chk),
++#endif
+     /* pthread.h */
+     HOOK_DIRECT_NO_DEBUG(getauxval),
+     HOOK_INDIRECT(gettid),
+@@ -3037,8 +3074,10 @@ static struct _hook hooks_common[] = {
+     HOOK_INDIRECT(pthread_attr_getschedparam),
+     HOOK_INDIRECT(pthread_attr_setstacksize),
+     HOOK_INDIRECT(pthread_attr_getstacksize),
++#ifdef __GLIBC__
+     HOOK_INDIRECT(pthread_attr_setstackaddr),
+     HOOK_INDIRECT(pthread_attr_getstackaddr),
++#endif
+     HOOK_INDIRECT(pthread_attr_setstack),
+     HOOK_INDIRECT(pthread_attr_getstack),
+     HOOK_INDIRECT(pthread_attr_setguardsize),
+@@ -3167,7 +3206,9 @@ static struct _hook hooks_common[] = {
+     HOOK_DIRECT_NO_DEBUG(seekdir),
+     HOOK_DIRECT_NO_DEBUG(telldir),
+     HOOK_DIRECT_NO_DEBUG(dirfd),
++#ifdef __GLIBC__
+     HOOK_INDIRECT(scandir),
++#endif
+     HOOK_INDIRECT(alphasort),
+     HOOK_INDIRECT(versionsort),
+     /* fcntl.h */
+@@ -3190,7 +3231,9 @@ static struct _hook hooks_common[] = {
+     HOOK_DIRECT_NO_DEBUG(localtime_r),
+     HOOK_DIRECT_NO_DEBUG(gmtime),
+     HOOK_DIRECT_NO_DEBUG(abort),
++#ifdef __GLIBC__
+     HOOK_DIRECT_NO_DEBUG(writev),
++#endif
+     /* unistd.h */
+     HOOK_DIRECT_NO_DEBUG(access),
+     /* grp.h */
+@@ -3222,13 +3265,17 @@ static struct _hook hooks_mm[] = {
+     HOOK_DIRECT(putenv),
+     HOOK_DIRECT(clearenv),
+     HOOK_DIRECT_NO_DEBUG(dprintf),
++#ifdef __GLIBC__
+     HOOK_DIRECT_NO_DEBUG(mallinfo),
++#endif
+     HOOK_DIRECT(malloc_usable_size),
+     HOOK_DIRECT(posix_memalign),
+     HOOK_DIRECT(mprotect),
+     HOOK_TO(__gnu_strerror_r, _hybris_hook__gnu_strerror_r),
++#ifdef __GLIBC__
+     HOOK_INDIRECT(pthread_rwlockattr_getkind_np),
+     HOOK_INDIRECT(pthread_rwlockattr_setkind_np),
++#endif
+     /* unistd.h */
+     HOOK_DIRECT(fork),
+     HOOK_DIRECT_NO_DEBUG(ttyname),
+@@ -3251,15 +3298,21 @@ static struct _hook hooks_mm[] = {
+     HOOK_DIRECT(localeconv),
+     HOOK_DIRECT(setlocale),
+     /* sys/mman.h */
++#ifdef __GLIBC__
++    // mmap from musl considers offsets from gralloc to be invalid,
++    // so avoid hooking it
+     HOOK_DIRECT(mmap),
+     HOOK_DIRECT(munmap),
++#endif
+     /* wchar.h */
+     HOOK_DIRECT_NO_DEBUG(wmemchr),
+     HOOK_DIRECT_NO_DEBUG(wmemcmp),
+     HOOK_DIRECT_NO_DEBUG(wmemcpy),
+     HOOK_DIRECT_NO_DEBUG(wmemmove),
+     HOOK_DIRECT_NO_DEBUG(wmemset),
++#ifdef __GLIBC__
+     HOOK_DIRECT_NO_DEBUG(wmempcpy),
++#endif
+     HOOK_INDIRECT(fputws),
+     // It's enough to hook vfwprintf here as fwprintf will call it with a
+     // proper va_list in place so we don't have to handle this here.
+@@ -3313,8 +3366,10 @@ static struct _hook hooks_mm[] = {
+     /* dirent.h */
+     HOOK_TO(readdir64, _hybris_hook_readdir),
+     HOOK_TO(readdir64_r, _hybris_hook_readdir_r),
++#ifdef __GLIBC__
+     HOOK_INDIRECT(scandir),
+     HOOK_TO(scandir64, _hybris_hook_scandir),
++#endif
+ };
+ 
+ static struct _hook hooks_n[] = {
+@@ -3327,8 +3382,10 @@ static struct _hook hooks_n[] = {
+     HOOK_INDIRECT(freopen64),
+     HOOK_INDIRECT(fileno_unlocked),
+     /* dirent.h */
++#ifdef __GLIBC__
+     HOOK_INDIRECT(scandirat),
+     HOOK_TO(scandirat64, _hybris_hook_scandirat),
++#endif
+ };
+ 
+ static struct _hook hooks_p[] = {
+diff --git a/hybris/common/hooks_shm.c b/hybris/common/hooks_shm.c
+index c90cee5..27dfeef 100644
+--- a/hybris/common/hooks_shm.c
++++ b/hybris/common/hooks_shm.c
+@@ -33,6 +33,10 @@
+ #include <sys/shm.h>
+ #include <sys/mman.h>
+ 
++#ifndef __GLIBC__
++#include <hybris/common/musl_compat.h>
++#endif
++
+ /* Debug */
+ #include "logging.h"
+ #define LOGD(message, ...) HYBRIS_DEBUG_LOG(HOOKS, message, ##__VA_ARGS__)
+diff --git a/hybris/common/jb/dlfcn.c b/hybris/common/jb/dlfcn.c
+index 248bed9..ab15893 100644
+--- a/hybris/common/jb/dlfcn.c
++++ b/hybris/common/jb/dlfcn.c
+@@ -29,6 +29,10 @@
+ extern void *(*_create_wrapper)(const char *symbol, void *function, int wrapper_type);
+ #endif
+ 
++#ifndef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
++#define PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP {{PTHREAD_MUTEX_RECURSIVE}}
++#endif
++
+ /* This file hijacks the symbols stubbed out in libdl.so. */
+ 
+ #define DL_SUCCESS                    0
+diff --git a/hybris/common/legacy_properties/properties.c b/hybris/common/legacy_properties/properties.c
+index 0191e7c..c96bd59 100644
+--- a/hybris/common/legacy_properties/properties.c
++++ b/hybris/common/legacy_properties/properties.c
+@@ -36,6 +36,9 @@
+ #include <poll.h>
+ 
+ #include <hybris/properties/properties.h>
++#ifndef __GLIBC__
++#include <hybris/common/musl_compat.h>
++#endif
+ #include "properties_p.h"
+ 
+ static const char property_service_socket[] = "/dev/socket/" PROP_SERVICE_NAME;
+diff --git a/hybris/common/mm/bionic/libc/include/link.h b/hybris/common/mm/bionic/libc/include/link.h
+index cb8e139..10d105d 100644
+--- a/hybris/common/mm/bionic/libc/include/link.h
++++ b/hybris/common/mm/bionic/libc/include/link.h
+@@ -29,6 +29,7 @@
+ #define _LINK_H_
+ 
+ #include <sys/types.h>
++#include <sys/cdefs.h>
+ #include <elf.h>
+ 
+ __BEGIN_DECLS
+diff --git a/hybris/common/mm/bionic/libc/private/libc_logging.h b/hybris/common/mm/bionic/libc/private/libc_logging.h
+index 6beb47e..e526c03 100644
+--- a/hybris/common/mm/bionic/libc/private/libc_logging.h
++++ b/hybris/common/mm/bionic/libc/private/libc_logging.h
+@@ -33,6 +33,8 @@
+ #include <stdarg.h>
+ #include <stddef.h>
+ #include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
+ 
+ __BEGIN_DECLS
+ 
+@@ -73,7 +75,18 @@ struct abort_msg_t {
+ // Formats a message to the log (priority 'fatal'), then aborts.
+ //
+ 
++#ifdef __GLIBC__
+  void __libc_fatal(const char* format, ...);
++#else
++void inline __libc_fatal(const char* format, ...)
++{
++  va_list ap;
++  va_start(ap, format);
++  vfprintf(stderr, format, ap);
++  va_end(ap);
++  abort();
++}
++#endif
+ 
+ //
+ // Formats a message to the log (priority 'fatal'), but doesn't abort.
+diff --git a/hybris/common/mm/dlfcn.cpp b/hybris/common/mm/dlfcn.cpp
+index b1ca517..e11fd1c 100644
+--- a/hybris/common/mm/dlfcn.cpp
++++ b/hybris/common/mm/dlfcn.cpp
+@@ -31,6 +31,10 @@
+ 
+ #include "hybris_compat.h"
+ 
++#ifndef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
++#define PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP {{PTHREAD_MUTEX_RECURSIVE}}
++#endif
++
+ #ifdef WANT_ARM_TRACING
+ #include "../wrappers.h"
+ #endif
+diff --git a/hybris/common/mm/hybris_compat.h b/hybris/common/mm/hybris_compat.h
+index 2e10383..b790242 100644
+--- a/hybris/common/mm/hybris_compat.h
++++ b/hybris/common/mm/hybris_compat.h
+@@ -27,11 +27,15 @@
+  */
+ 
+ 
++
+ #ifndef HYBRIS_ANDROID_MM_COMPAT_H_
+ #define HYBRIS_ANDROID_MM_COMPAT_H_
+ 
+ #include <string.h>
+ #include <memory.h>
++#ifndef __GLIBC__
++#include <hybris/common/musl_compat.h>
++#endif
+ 
+ extern "C" size_t strlcpy(char *dest, const char *src, size_t size);
+ extern "C" size_t strlcat(char *dst, const char *src, size_t size);
+@@ -55,4 +59,12 @@ extern "C" size_t strlcat(char *dst, const char *src, size_t size);
+ #define DT_ANDROID_RELA (DT_LOOS + 4)
+ #define DT_ANDROID_RELASZ (DT_LOOS + 5)
+ 
++#if defined (__aarch64__)
++
++#ifndef R_AARCH64_IRELATIVE
++#define R_AARCH64_IRELATIVE 1032
++#endif
++
++#endif
++
+ #endif
+diff --git a/hybris/common/mm/linker.cpp b/hybris/common/mm/linker.cpp
+index c09d482..d97f650 100644
+--- a/hybris/common/mm/linker.cpp
++++ b/hybris/common/mm/linker.cpp
+@@ -26,6 +26,8 @@
+  * SUCH DAMAGE.
+  */
+ 
++
++
+ #include <android/api-level.h>
+ #include <dlfcn.h>
+ #include <errno.h>
+@@ -38,6 +40,9 @@
+ #include <sys/mman.h>
+ #include <sys/param.h>
+ #include <unistd.h>
++#ifndef __GLIBC__
++#include <libgen.h>
++#endif
+ 
+ #include <new>
+ #include <string>
+@@ -1221,7 +1226,11 @@ static const char* fix_dt_needed(const char* dt_needed, const char* sopath) {
+ #if !defined(__LP64__)
+   // Work around incorrect DT_NEEDED entries for old apps: http://b/21364029
+   if (get_application_target_sdk_version() <= 22) {
+-    const char* bname = basename(dt_needed);
++#ifdef __GLIBC__
++    const char* bname = basename(const_cast<char*>(dt_needed));
++#else
++    const char* bname = (const char*) basename((char*)dt_needed);
++#endif
+     if (bname != dt_needed) {
+       DL_WARN("'%s' library has invalid DT_NEEDED entry '%s'", sopath, dt_needed);
+     }
+@@ -2956,7 +2965,11 @@ bool soinfo::prelink_image() {
+   // the main executable and linker; they do not need to have dt_soname
+   if (soname_ == nullptr && this != somain && (flags_ & FLAG_LINKER) == 0 &&
+       get_application_target_sdk_version() <= 22) {
+-    soname_ = basename(realpath_.c_str());
++#ifdef __GLIBC__
++    soname_ = basename(const_cast<char*>(realpath_.c_str()));
++#else
++    soname_ = (const char*) basename((char*) realpath_.c_str());
++#endif
+     DL_WARN("%s: is missing DT_SONAME will use basename as a replacement: \"%s\"",
+         get_realpath(), soname_);
+   }
+diff --git a/hybris/common/n/bionic/libc/include/dlfcn.h b/hybris/common/n/bionic/libc/include/dlfcn.h
+index c2e8980..692ce52 100644
+--- a/hybris/common/n/bionic/libc/include/dlfcn.h
++++ b/hybris/common/n/bionic/libc/include/dlfcn.h
+@@ -46,8 +46,8 @@ typedef struct {
+ extern void* dlopen(const char*  filename, int flag);
+ extern int dlclose(void*  handle);
+ extern const char* dlerror(void);
+-extern void* dlsym(void* handle, const char* symbol) __nonnull((2));
+-extern void* dlvsym(void* handle, const char* symbol, const char* version) __nonnull((2, 3));
++extern void* dlsym(void* handle, const char* symbol) __attribute__((nonnull((2))));
++extern void* dlvsym(void* handle, const char* symbol, const char* version) __attribute__((nonnull((2, 3))));
+ extern int dladdr(const void* addr, Dl_info *info);
+ 
+ enum {
+diff --git a/hybris/common/n/bionic/libc/include/link.h b/hybris/common/n/bionic/libc/include/link.h
+index cb8e139..10d105d 100644
+--- a/hybris/common/n/bionic/libc/include/link.h
++++ b/hybris/common/n/bionic/libc/include/link.h
+@@ -29,6 +29,7 @@
+ #define _LINK_H_
+ 
+ #include <sys/types.h>
++#include <sys/cdefs.h>
+ #include <elf.h>
+ 
+ __BEGIN_DECLS
+diff --git a/hybris/common/n/bionic/libc/private/libc_logging.h b/hybris/common/n/bionic/libc/private/libc_logging.h
+index a696cec..2da0238 100644
+--- a/hybris/common/n/bionic/libc/private/libc_logging.h
++++ b/hybris/common/n/bionic/libc/private/libc_logging.h
+@@ -33,6 +33,8 @@
+ #include <stdarg.h>
+ #include <stddef.h>
+ #include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
+ 
+ __BEGIN_DECLS
+ 
+@@ -73,7 +75,18 @@ struct abort_msg_t {
+ // Formats a message to the log (priority 'fatal'), then aborts.
+ //
+ 
+-void __libc_fatal(const char* format, ...);
++#ifdef __GLIBC__
++ void __libc_fatal(const char* format, ...);
++#else
++void inline __libc_fatal(const char* format, ...)
++{
++  va_list ap;
++  va_start(ap, format);
++  vfprintf(stderr, format, ap);
++  va_end(ap);
++  abort();
++}
++#endif
+ 
+ //
+ // Formats a message to the log (priority 'fatal'), but doesn't abort.
+diff --git a/hybris/common/n/dlfcn.cpp b/hybris/common/n/dlfcn.cpp
+index 92c1349..bfdbb9c 100644
+--- a/hybris/common/n/dlfcn.cpp
++++ b/hybris/common/n/dlfcn.cpp
+@@ -30,6 +30,10 @@
+ 
+ #include "hybris_compat.h"
+ 
++#ifndef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
++#define PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP {{PTHREAD_MUTEX_RECURSIVE}}
++#endif
++
+ /* This file hijacks the symbols stubbed out in libdl.so. */
+ 
+ static pthread_mutex_t g_dl_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+diff --git a/hybris/common/n/hybris_compat.cpp b/hybris/common/n/hybris_compat.cpp
+index cfe1e78..5238409 100644
+--- a/hybris/common/n/hybris_compat.cpp
++++ b/hybris/common/n/hybris_compat.cpp
+@@ -27,3 +27,11 @@
+  */
+ 
+ #include "hybris_compat.h"
++
++#ifndef __GLIBC__
++const char *gnu_basename(const char *path)
++{
++    char *base = strrchr(path, '/');
++    return base ? base + 1 : path;
++}
++#endif
+diff --git a/hybris/common/n/hybris_compat.h b/hybris/common/n/hybris_compat.h
+index 2e10383..dbb41b3 100644
+--- a/hybris/common/n/hybris_compat.h
++++ b/hybris/common/n/hybris_compat.h
+@@ -27,11 +27,15 @@
+  */
+ 
+ 
++
+ #ifndef HYBRIS_ANDROID_MM_COMPAT_H_
+ #define HYBRIS_ANDROID_MM_COMPAT_H_
+ 
+ #include <string.h>
+ #include <memory.h>
++#ifndef __GLIBC__
++#include <hybris/common/musl_compat.h>
++#endif
+ 
+ extern "C" size_t strlcpy(char *dest, const char *src, size_t size);
+ extern "C" size_t strlcat(char *dst, const char *src, size_t size);
+@@ -55,4 +59,23 @@ extern "C" size_t strlcat(char *dst, const char *src, size_t size);
+ #define DT_ANDROID_RELA (DT_LOOS + 4)
+ #define DT_ANDROID_RELASZ (DT_LOOS + 5)
+ 
++#if defined (__aarch64__)
++
++#ifndef R_AARCH64_TLS_DTPREL32
++#define R_AARCH64_TLS_DTPREL32 1031
++#endif
++
++#ifndef R_AARCH64_IRELATIVE
++#define R_AARCH64_IRELATIVE 1032
++#endif
++
++#endif
++
++#ifndef __GLIBC__
++#ifndef basename
++const char *gnu_basename(const char *path);
++#define basename gnu_basename
++#endif
++#endif
++
+ #endif
+diff --git a/hybris/common/n/linker.cpp b/hybris/common/n/linker.cpp
+index de06e05..2dc188c 100644
+--- a/hybris/common/n/linker.cpp
++++ b/hybris/common/n/linker.cpp
+@@ -26,6 +26,8 @@
+  * SUCH DAMAGE.
+  */
+ 
++ 
++
+ #include <android/api-level.h>
+ #include <errno.h>
+ #include <fcntl.h>
+@@ -313,7 +315,7 @@ static bool is_greylisted(const char* name, const soinfo* needed_by) {
+   // if this is an absolute path - make sure it points to /system/lib(64)
+   if (name[0] == '/' && dirname(name) == kSystemLibDir) {
+     // and reduce the path to basename
+-    name = basename(name);
++    name = basename(const_cast<char*>(name));
+   }
+ 
+   for (size_t i = 0; kLibraryGreyList[i] != nullptr; ++i) {
+@@ -1836,7 +1838,7 @@ static const char* fix_dt_needed(const char* dt_needed, const char* sopath) {
+ #if !defined(__LP64__)
+   // Work around incorrect DT_NEEDED entries for old apps: http://b/21364029
+   if (get_application_target_sdk_version() <= 22) {
+-    const char* bname = basename(dt_needed);
++    const char* bname = basename(const_cast<char*>(dt_needed));
+     if (bname != dt_needed) {
+       DL_WARN("library \"%s\" has invalid DT_NEEDED entry \"%s\"", sopath, dt_needed);
+       add_dlwarning(sopath, "invalid DT_NEEDED entry",  dt_needed);
+@@ -4219,7 +4221,7 @@ bool soinfo::prelink_image() {
+   // the main executable and linker; they do not need to have dt_soname
+   if (soname_ == nullptr && this != somain && (flags_ & FLAG_LINKER) == 0 &&
+       get_application_target_sdk_version() <= 22) {
+-    soname_ = basename(realpath_.c_str());
++    soname_ = basename(const_cast<char*>(realpath_.c_str()));
+     DL_WARN("%s: is missing DT_SONAME will use basename as a replacement: \"%s\"",
+         get_realpath(), soname_);
+     // Don't call add_dlwarning because a missing DT_SONAME isn't important enough to show in the UI
+diff --git a/hybris/common/n/linker_dlwarning.cpp b/hybris/common/n/linker_dlwarning.cpp
+index ceac789..973a9ef 100644
+--- a/hybris/common/n/linker_dlwarning.cpp
++++ b/hybris/common/n/linker_dlwarning.cpp
+@@ -29,7 +29,7 @@ void add_dlwarning(const char* sopath, const char* message, const char* value) {
+     current_msg += '\n';
+   }
+ 
+-  current_msg = current_msg + basename(sopath) + ": " + message;
++  current_msg = current_msg + basename(const_cast<char*>(sopath)) + ": " + message;
+ 
+   if (value != nullptr) {
+     current_msg = current_msg + " \"" + value + "\"";
+diff --git a/hybris/common/o/bionic/libc/include/dlfcn.h b/hybris/common/o/bionic/libc/include/dlfcn.h
+index acec4a2..3943882 100644
+--- a/hybris/common/o/bionic/libc/include/dlfcn.h
++++ b/hybris/common/o/bionic/libc/include/dlfcn.h
+@@ -57,11 +57,11 @@ typedef struct {
+ } Dl_info;
+ 
+ void* dlopen(const char* filename, int flag);
+-int dlclose(void* handle) __nonnull((1));
++int dlclose(void* handle) __attribute__((nonnull((1))));
+ char* dlerror(void);
+-void* dlsym(void* handle, const char* symbol) __nonnull((2));
+-void* dlvsym(void* handle, const char* symbol, const char* version) __nonnull((2, 3));
+-int dladdr(const void* addr, Dl_info* info) __nonnull((2));
++void* dlsym(void* handle, const char* symbol) __attribute__((nonnull((2))));
++void* dlvsym(void* handle, const char* symbol, const char* version) __attribute__((nonnull((2, 3))));
++int dladdr(const void* addr, Dl_info* info) __attribute__((nonnull((2))));
+ 
+ #define RTLD_LOCAL    0
+ #define RTLD_LAZY     0x00001
+diff --git a/hybris/common/o/dlfcn.cpp b/hybris/common/o/dlfcn.cpp
+index 6fddbbb..f98f4d2 100644
+--- a/hybris/common/o/dlfcn.cpp
++++ b/hybris/common/o/dlfcn.cpp
+@@ -42,6 +42,10 @@
+ #include "private/bionic_tls.h"
+ #include "private/ScopedPthreadMutexLocker.h"
+ 
++#ifndef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
++#define PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP {{PTHREAD_MUTEX_RECURSIVE}}
++#endif
++
+ static pthread_mutex_t g_dl_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+ 
+ static __thread char *dl_err_str;
+diff --git a/hybris/common/o/hybris_compat.cpp b/hybris/common/o/hybris_compat.cpp
+index cfe1e78..5238409 100644
+--- a/hybris/common/o/hybris_compat.cpp
++++ b/hybris/common/o/hybris_compat.cpp
+@@ -27,3 +27,11 @@
+  */
+ 
+ #include "hybris_compat.h"
++
++#ifndef __GLIBC__
++const char *gnu_basename(const char *path)
++{
++    char *base = strrchr(path, '/');
++    return base ? base + 1 : path;
++}
++#endif
+diff --git a/hybris/common/o/hybris_compat.h b/hybris/common/o/hybris_compat.h
+index 2e10383..dbb41b3 100644
+--- a/hybris/common/o/hybris_compat.h
++++ b/hybris/common/o/hybris_compat.h
+@@ -27,11 +27,15 @@
+  */
+ 
+ 
++
+ #ifndef HYBRIS_ANDROID_MM_COMPAT_H_
+ #define HYBRIS_ANDROID_MM_COMPAT_H_
+ 
+ #include <string.h>
+ #include <memory.h>
++#ifndef __GLIBC__
++#include <hybris/common/musl_compat.h>
++#endif
+ 
+ extern "C" size_t strlcpy(char *dest, const char *src, size_t size);
+ extern "C" size_t strlcat(char *dst, const char *src, size_t size);
+@@ -55,4 +59,23 @@ extern "C" size_t strlcat(char *dst, const char *src, size_t size);
+ #define DT_ANDROID_RELA (DT_LOOS + 4)
+ #define DT_ANDROID_RELASZ (DT_LOOS + 5)
+ 
++#if defined (__aarch64__)
++
++#ifndef R_AARCH64_TLS_DTPREL32
++#define R_AARCH64_TLS_DTPREL32 1031
++#endif
++
++#ifndef R_AARCH64_IRELATIVE
++#define R_AARCH64_IRELATIVE 1032
++#endif
++
++#endif
++
++#ifndef __GLIBC__
++#ifndef basename
++const char *gnu_basename(const char *path);
++#define basename gnu_basename
++#endif
++#endif
++
+ #endif
+diff --git a/hybris/common/o/linker.cpp b/hybris/common/o/linker.cpp
+index a95deb5..4b9124d 100644
+--- a/hybris/common/o/linker.cpp
++++ b/hybris/common/o/linker.cpp
+@@ -26,6 +26,8 @@
+  * SUCH DAMAGE.
+  */
+ 
++
++
+ #include <android/api-level.h>
+ #include <errno.h>
+ #include <fcntl.h>
+@@ -218,7 +220,7 @@ static std::string resolve_soname(const std::string& name) {
+   // On the other hand there are several places where we already assume that
+   // soname == basename in particular for any not-loaded library mentioned
+   // in DT_NEEDED list.
+-  return basename(name.c_str());
++  return basename(const_cast<char*>(name.c_str()));
+ }
+ 
+ static bool maybe_accessible_via_namespace_links(android_namespace_t* ns, const char* name) {
+@@ -269,7 +271,7 @@ static bool is_greylisted(android_namespace_t* ns, const char* name, const soinf
+   // if this is an absolute path - make sure it points to /system/lib(64)
+   if (name[0] == '/' && dirname(name) == kSystemLibDir) {
+     // and reduce the path to basename
+-    name = basename(name);
++    name = basename(const_cast<char*>(name));
+   }
+ 
+   for (size_t i = 0; kLibraryGreyList[i] != nullptr; ++i) {
+@@ -1176,7 +1178,7 @@ const char* fix_dt_needed(const char* dt_needed, const char* sopath) {
+ #if !defined(__LP64__)
+   // Work around incorrect DT_NEEDED entries for old apps: http://b/21364029
+   if (get_application_target_sdk_version() < __ANDROID_API_M__) {
+-    const char* bname = basename(dt_needed);
++    const char* bname = basename(const_cast<char*>(dt_needed));
+     if (bname != dt_needed) {
+       DL_WARN("library \"%s\" has invalid DT_NEEDED entry \"%s\"", sopath, dt_needed);
+       add_dlwarning(sopath, "invalid DT_NEEDED entry",  dt_needed);
+@@ -3432,7 +3434,7 @@ bool soinfo::prelink_image() {
+       this != solist_get_somain() &&
+       (flags_ & FLAG_LINKER) == 0 &&
+       get_application_target_sdk_version() < __ANDROID_API_M__) {
+-    soname_ = basename(realpath_.c_str());
++    soname_ = basename(const_cast<char*>(realpath_.c_str()));
+     DL_WARN("%s: is missing DT_SONAME will use basename as a replacement: \"%s\"",
+         get_realpath(), soname_);
+     // Don't call add_dlwarning because a missing DT_SONAME isn't important enough to show in the UI
+diff --git a/hybris/common/o/linker_dlwarning.cpp b/hybris/common/o/linker_dlwarning.cpp
+index 21be639..0c25ba5 100644
+--- a/hybris/common/o/linker_dlwarning.cpp
++++ b/hybris/common/o/linker_dlwarning.cpp
+@@ -41,7 +41,7 @@ void add_dlwarning(const char* sopath, const char* message, const char* value) {
+     current_msg += '\n';
+   }
+ 
+-  current_msg = current_msg + basename(sopath) + ": " + message;
++  current_msg = current_msg + basename(const_cast<char*>(sopath)) + ": " + message;
+ 
+   if (value != nullptr) {
+     current_msg = current_msg + " \"" + value + "\"";
+diff --git a/hybris/common/o/linker_logger.cpp b/hybris/common/o/linker_logger.cpp
+index 9101f88..d2fb034 100644
+--- a/hybris/common/o/linker_logger.cpp
++++ b/hybris/common/o/linker_logger.cpp
+@@ -77,7 +77,7 @@ static uint32_t ParseProperty(const std::string& value) {
+ #ifdef DISABLED_FOR_HYBRIS_SUPPORT
+ static void GetAppSpecificProperty(char* buffer) {
+   // Get process basename.
+-  const char* process_name_start = basename(g_argv[0]);
++  const char* process_name_start = basename(const_cast<char*>(g_argv[0]));
+ 
+   // Remove ':' and everything after it. This is the naming convention for
+   // services: https://developer.android.com/guide/components/services.html
+diff --git a/hybris/common/o/linker_soinfo.cpp b/hybris/common/o/linker_soinfo.cpp
+index 84e2e94..81d78b0 100644
+--- a/hybris/common/o/linker_soinfo.cpp
++++ b/hybris/common/o/linker_soinfo.cpp
+@@ -26,6 +26,8 @@
+  * SUCH DAMAGE.
+  */
+ 
++
++
+ #include "linker_soinfo.h"
+ 
+ #include <dlfcn.h>
+@@ -365,6 +367,8 @@ ElfW(Sym)* soinfo::elf_addr_lookup(const void* addr) {
+   return nullptr;
+ }
+ 
++#ifdef __GLIBC__
++
+ static void call_function(const char* function_name,
+                           linker_ctor_function_t function,
+                           const char* realpath) {
+@@ -444,6 +448,7 @@ void soinfo::call_constructors() {
+     return;
+   }
+ 
++
+   // We set constructors_called before actually calling the constructors, otherwise it doesn't
+   // protect against recursive constructor calls. One simple example of constructor recursion
+   // is the libc debug malloc, which is implemented in libc_malloc_debug_leak.so:
+@@ -491,6 +496,7 @@ void soinfo::call_destructors() {
+   // DT_FINI should be called after DT_FINI_ARRAY if both are present.
+   call_function("DT_FINI", fini_func_, get_realpath());
+ }
++#endif
+ 
+ void soinfo::add_child(soinfo* child) {
+   if (has_min_version(0)) {
+diff --git a/hybris/common/q/bionic/libc/include/sys/cdefs-android.h b/hybris/common/q/bionic/libc/include/sys/cdefs-android.h
+index 02012e9..fbd23ce 100644
+--- a/hybris/common/q/bionic/libc/include/sys/cdefs-android.h
++++ b/hybris/common/q/bionic/libc/include/sys/cdefs-android.h
+@@ -1,5 +1,5 @@
+ #pragma once
+ #include <sys/cdefs.h>
+ #define __LIBC_HIDDEN__ __attribute__((visibility("hidden")))
+-#define __unused __attribute__((__unused__))
++#define __bionic_unused __attribute__((__unused__))
+ #define __BIONIC_ALIGN(__value, __alignment) (((__value) + (__alignment)-1) & ~((__alignment)-1))
+diff --git a/hybris/common/q/bionic/libc/private/ScopedSignalBlocker.h b/hybris/common/q/bionic/libc/private/ScopedSignalBlocker.h
+index 7300aba..abb1c04 100644
+--- a/hybris/common/q/bionic/libc/private/ScopedSignalBlocker.h
++++ b/hybris/common/q/bionic/libc/private/ScopedSignalBlocker.h
+@@ -35,8 +35,10 @@
+ 
+ typedef int sig_atomic_t;
+ 
++#ifdef __GLIBC__
+ typedef __sighandler_t sig_t; /* BSD compatibility. */
+ typedef __sighandler_t sighandler_t; /* glibc compatibility. */
++#endif
+ 
+ #if defined(__LP64__) || defined(__mips__)
+ typedef sigset_t sigset64_t;
+diff --git a/hybris/common/q/dlfcn.cpp b/hybris/common/q/dlfcn.cpp
+index 2341109..2fcf66d 100644
+--- a/hybris/common/q/dlfcn.cpp
++++ b/hybris/common/q/dlfcn.cpp
+@@ -42,6 +42,13 @@
+ #include "private/bionic_tls.h"
+ #include "private/ScopedPthreadMutexLocker.h"
+ 
++#if !defined(__GLIBC__) && !defined(PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP)
++// musl doesn't have the non-portable _NP variant, so define it to the musl equivalent
++#define PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP {{PTHREAD_MUTEX_RECURSIVE}}
++#endif
++
++/* This file hijacks the symbols stubbed out in libdl.so. */
++
+ #define __LINKER_PUBLIC__ __attribute__((visibility("default")))
+ 
+ extern "C" {
+diff --git a/hybris/common/q/hybris_compat.h b/hybris/common/q/hybris_compat.h
+index b8155b7..727c0f1 100644
+--- a/hybris/common/q/hybris_compat.h
++++ b/hybris/common/q/hybris_compat.h
+@@ -27,12 +27,14 @@
+  */
+ 
+ 
++
+ #ifndef HYBRIS_ANDROID_MM_COMPAT_H_
+ #define HYBRIS_ANDROID_MM_COMPAT_H_
+ 
+ #include <string.h>
+ #include <memory.h>
+ 
++
+ extern "C" size_t strlcpy(char *dest, const char *src, size_t size);
+ extern "C" size_t strlcat(char *dst, const char *src, size_t size);
+ 
+diff --git a/hybris/common/q/linker.cpp b/hybris/common/q/linker.cpp
+index cf09de2..c29d323 100644
+--- a/hybris/common/q/linker.cpp
++++ b/hybris/common/q/linker.cpp
+@@ -26,6 +26,7 @@
+  * SUCH DAMAGE.
+  */
+ 
++
+ #include <android/api-level.h>
+ #include <errno.h>
+ #include <fcntl.h>
+@@ -77,6 +78,8 @@
+ //#include "android-base/stringprintf.h"
+ //#include "ziparchive/zip_archive.h"
+ 
++#include <libgen.h>
++
+ #ifdef WANT_ARM_TRACING
+ #include "../wrappers.h"
+ #endif
+@@ -188,7 +191,7 @@ static std::string resolve_soname(const std::string& name) {
+   // On the other hand there are several places where we already assume that
+   // soname == basename in particular for any not-loaded library mentioned
+   // in DT_NEEDED list.
+-  return basename(name.c_str());
++  return basename(const_cast<char*>(name.c_str()));
+ }
+ 
+ static bool maybe_accessible_via_namespace_links(android_namespace_t* ns, const char* name) {
+@@ -238,7 +241,7 @@ static bool is_greylisted(android_namespace_t* ns, const char* name, const soinf
+   // if this is an absolute path - make sure it points to /system/lib(64)
+   if (name[0] == '/' && dirname(name) == kSystemLibDir) {
+     // and reduce the path to basename
+-    name = basename(name);
++    name = basename(const_cast<char*>(name));
+   }
+ 
+   for (size_t i = 0; kLibraryGreyList[i] != nullptr; ++i) {
+@@ -276,7 +279,7 @@ static bool translateSystemPathToApexPath(const char* name, std::string* out_nam
+     return false;
+   }
+ 
+-  const char* base_name = basename(name);
++  const char* base_name = basename(const_cast<char*>(name));
+ 
+   for (const char* soname : kSystemToRuntimeApexLibs) {
+     if (strcmp(base_name, soname) == 0) {
+@@ -1199,12 +1202,12 @@ int open_executable(const char* path, off64_t* file_offset, std::string* realpat
+   return open_library_at_path(&zip_archive_cache, path, file_offset, realpath);
+ }
+ 
+-const char* fix_dt_needed(const char* dt_needed, const char* sopath __unused) {
++const char* fix_dt_needed(const char* dt_needed, const char* sopath __attribute__((__unused__))) {
+ #if !defined(__LP64__)
+   // Work around incorrect DT_NEEDED entries for old apps: http://b/21364029
+   int app_target_api_level = get_application_target_sdk_version();
+   if (app_target_api_level < __ANDROID_API_M__) {
+-    const char* bname = basename(dt_needed);
++    const char* bname = basename(const_cast<char*>(dt_needed));
+     if (bname != dt_needed) {
+       DL_WARN_documented_change(__ANDROID_API_M__,
+                                 "invalid-dt_needed-entries-enforced-for-api-level-23",
+@@ -2873,7 +2876,7 @@ bool soinfo::relocate_relr() {
+ 
+ #if !defined(__mips__)
+ #if defined(USE_RELA)
+-static ElfW(Addr) get_addend(ElfW(Rela)* rela, ElfW(Addr) reloc_addr __unused) {
++static ElfW(Addr) get_addend(ElfW(Rela)* rela, ElfW(Addr) reloc_addr __attribute__((__unused__))) {
+   return rela->r_addend;
+ }
+ #else
+@@ -3954,7 +3957,7 @@ bool soinfo::prelink_image() {
+       this != solist_get_somain() &&
+       (flags_ & FLAG_LINKER) == 0 &&
+       get_application_target_sdk_version() < __ANDROID_API_M__) {
+-    soname_ = basename(realpath_.c_str());
++    soname_ = basename(const_cast<char*>(realpath_.c_str()));
+     DL_WARN_documented_change(__ANDROID_API_M__,
+                               "missing-soname-enforced-for-api-level-23",
+                               "\"%s\" has no DT_SONAME (will use %s instead)",
+@@ -4228,7 +4231,7 @@ std::vector<android_namespace_t*> init_default_namespaces(const char* executable
+ 
+   const char *interp = phdr_table_get_interpreter_name(somain->phdr, somain->phnum,
+                                                        somain->load_bias);
+-  const char* bname = (interp != nullptr) ? basename(interp) : nullptr;
++  const char* bname = (interp != nullptr) ? basename(const_cast<char*>(interp)) : nullptr;
+ 
+   g_is_asan = bname != nullptr &&
+               (strcmp(bname, "linker_asan") == 0 ||
+diff --git a/hybris/common/q/linker.h b/hybris/common/q/linker.h
+index 13fa9a4..d3d1ac6 100644
+--- a/hybris/common/q/linker.h
++++ b/hybris/common/q/linker.h
+@@ -26,6 +26,8 @@
+  * SUCH DAMAGE.
+  */
+ 
++
++
+ #pragma once
+ 
+ #include <dlfcn.h>
+diff --git a/hybris/common/q/linker_dlwarning.cpp b/hybris/common/q/linker_dlwarning.cpp
+index 21be639..9ab4b18 100644
+--- a/hybris/common/q/linker_dlwarning.cpp
++++ b/hybris/common/q/linker_dlwarning.cpp
+@@ -34,6 +34,8 @@
+ 
+ #include "hybris_compat.h"
+ 
++#include <libgen.h>
++
+ static std::string current_msg;
+ 
+ void add_dlwarning(const char* sopath, const char* message, const char* value) {
+@@ -41,7 +43,7 @@ void add_dlwarning(const char* sopath, const char* message, const char* value) {
+     current_msg += '\n';
+   }
+ 
+-  current_msg = current_msg + basename(sopath) + ": " + message;
++  current_msg = current_msg + basename(const_cast<char*>(sopath)) + ": " + message;
+ 
+   if (value != nullptr) {
+     current_msg = current_msg + " \"" + value + "\"";
+diff --git a/hybris/common/q/linker_logger.cpp b/hybris/common/q/linker_logger.cpp
+index 6972e83..d01b617 100644
+--- a/hybris/common/q/linker_logger.cpp
++++ b/hybris/common/q/linker_logger.cpp
+@@ -80,7 +80,7 @@ static uint32_t ParseProperty(const std::string& value) {
+ #ifdef DISABLED_FOR_HYBRIS_SUPPORT
+ static void GetAppSpecificProperty(char* buffer) {
+   // Get process basename.
+-  const char* process_name_start = basename(g_argv[0]);
++  const char* process_name_start = basename(const_cast<char*>(g_argv[0]));
+ 
+   // Remove ':' and everything after it. This is the naming convention for
+   // services: https://developer.android.com/guide/components/services.html
+diff --git a/hybris/common/q/linker_namespaces.cpp b/hybris/common/q/linker_namespaces.cpp
+index 3fe3ba8..7631eca 100644
+--- a/hybris/common/q/linker_namespaces.cpp
++++ b/hybris/common/q/linker_namespaces.cpp
+@@ -34,13 +34,15 @@
+ #include <dlfcn.h>
+ #include <algorithm>
+ 
++#include <libgen.h>
++
+ bool android_namespace_t::is_accessible(const std::string& file) {
+   if (!is_isolated_) {
+     return true;
+   }
+ 
+   if (!whitelisted_libs_.empty()) {
+-    const char *lib_name = basename(file.c_str());
++    const char *lib_name = basename(const_cast<char*>(file.c_str()));
+     if (std::find(whitelisted_libs_.begin(), whitelisted_libs_.end(),
+                   lib_name) == whitelisted_libs_.end()) {
+       return false;
+diff --git a/hybris/common/q/linker_relocs.h b/hybris/common/q/linker_relocs.h
+index 68191f9..43f00ac 100644
+--- a/hybris/common/q/linker_relocs.h
++++ b/hybris/common/q/linker_relocs.h
+@@ -30,6 +30,13 @@
+ 
+ #include <elf.h>
+ 
++#if defined(__aarch64__) && !defined(R_AARCH64_IRELATIVE)
++/* musl's elf.h does not define this */
++#define R_AARCH64_IRELATIVE 1032
++#endif
++
++struct soinfo;
++
+ #define R_GENERIC_NONE 0 // R_*_NONE is always 0
+ 
+ #if defined (__aarch64__)
+diff --git a/hybris/common/q/linker_soinfo.cpp b/hybris/common/q/linker_soinfo.cpp
+index 39d096f..4d0729f 100644
+--- a/hybris/common/q/linker_soinfo.cpp
++++ b/hybris/common/q/linker_soinfo.cpp
+@@ -26,6 +26,8 @@
+  * SUCH DAMAGE.
+  */
+ 
++
++
+ #include "linker_soinfo.h"
+ 
+ #include <dlfcn.h>
+@@ -381,9 +383,10 @@ ElfW(Sym)* soinfo::elf_addr_lookup(const void* addr) {
+   return nullptr;
+ }
+ 
+-static void call_function(const char* function_name __unused,
++
++static void call_function(const char* function_name __bionic_unused,
+                           linker_ctor_function_t function,
+-                          const char* realpath __unused) {
++                          const char* realpath __bionic_unused) {
+   if (function == nullptr || reinterpret_cast<uintptr_t>(function) == static_cast<uintptr_t>(-1)) {
+     return;
+   }
+@@ -393,9 +396,9 @@ static void call_function(const char* function_name __unused,
+   TRACE("[ Done calling c-tor %s @ %p for '%s' ]", function_name, function, realpath);
+ }
+ 
+-static void call_function(const char* function_name __unused,
++static void call_function(const char* function_name __bionic_unused,
+                           linker_dtor_function_t function,
+-                          const char* realpath __unused) {
++                          const char* realpath __bionic_unused) {
+   if (function == nullptr || reinterpret_cast<uintptr_t>(function) == static_cast<uintptr_t>(-1)) {
+     return;
+   }
+@@ -406,7 +409,7 @@ static void call_function(const char* function_name __unused,
+ }
+ 
+ template <typename F>
+-static void call_array(const char* array_name __unused,
++static void call_array(const char* array_name __bionic_unused,
+                        F* functions,
+                        size_t count,
+                        bool reverse,
+@@ -457,6 +460,7 @@ void soinfo::call_constructors() {
+     return;
+   }
+ 
++
+   // We set constructors_called before actually calling the constructors, otherwise it doesn't
+   // protect against recursive constructor calls. One simple example of constructor recursion
+   // is the libc debug malloc, which is implemented in libc_malloc_debug_leak.so:
+@@ -491,6 +495,7 @@ void soinfo::call_constructors() {
+   }
+ }
+ 
++
+ void soinfo::call_destructors() {
+   if (!constructors_called  || (soname_ != nullptr && (strcmp(soname_, "libc.so") == 0))) {
+     return;
+@@ -505,6 +510,7 @@ void soinfo::call_destructors() {
+   call_function("DT_FINI", fini_func_, get_realpath());
+ }
+ 
++
+ void soinfo::add_child(soinfo* child) {
+   if (has_min_version(0)) {
+     child->parents_.push_back(this);
+diff --git a/hybris/include/hybris/common/musl_compat.h b/hybris/include/hybris/common/musl_compat.h
+new file mode 100644
+index 0000000..c5f86f2
+--- /dev/null
++++ b/hybris/include/hybris/common/musl_compat.h
+@@ -0,0 +1,10 @@
++#include <unistd.h>
++/* taken from glibc unistd.h and fixes musl */
++#ifndef TEMP_FAILURE_RETRY
++#define TEMP_FAILURE_RETRY(expression) \
++  (__extension__                                                              \
++    ({ long int __result;                                                     \
++       do __result = (long int) (expression);                                 \
++       while (__result == -1L && errno == EINTR);                             \
++       __result; }))
++#endif
+diff --git a/hybris/libsync/sync.c b/hybris/libsync/sync.c
+index e858ba0..6b4ca42 100644
+--- a/hybris/libsync/sync.c
++++ b/hybris/libsync/sync.c
+@@ -41,6 +41,7 @@ void sync_file_info_free(struct sync_file_info* info);
+ #include <linux/sync.h>
+ #include <linux/sw_sync.h>
+ #else
++#include <sys/cdefs.h>
+ #include <sync/sync.h>
+ #endif
+ 
+diff --git a/hybris/tests/test_audio.c b/hybris/tests/test_audio.c
+index a16f469..916d35b 100644
+--- a/hybris/tests/test_audio.c
++++ b/hybris/tests/test_audio.c
+@@ -15,6 +15,8 @@
+  *
+  */
+ 
++#define _POSIX_C_SOURCE 200809L
++#include <string.h>
+ #include <android-config.h>
+ #include <memory.h>
+ #include <assert.h>
+diff --git a/hybris/tests/test_camera.cpp b/hybris/tests/test_camera.cpp
+index 1a9c62e..256ce94 100644
+--- a/hybris/tests/test_camera.cpp
++++ b/hybris/tests/test_camera.cpp
+@@ -45,6 +45,10 @@
+ #include <sys/stat.h>
+ #include <sys/types.h>
+ 
++#ifndef __GLIBC__
++#include <hybris/common/musl_compat.h>
++#endif
++
+ #include "test_common.h"
+ 
+ int shot_counter = 1;

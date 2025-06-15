@@ -1,0 +1,31 @@
+pkgname=halium-gsi
+pkgver=10
+pkgrel=1
+pkgdesc="Halium 10 (Android 10) GSI for aarch64"
+arch="aarch64"
+url="https://ubports.com/"
+license="proprietary"
+options="!check !strip !tracedeps"
+makedepends="android-tools e2fsprogs-extra xz tar"
+
+_filename="halium_halium_arm64.tar.xz"
+source="$_filename::https://ci.ubports.com/job/UBportsCommunityPortsJenkinsCI/job/ubports%252Fporting%252Fcommunity-ports%252Fjenkins-ci%252Fgeneric_arm64/job/halium-10.0/lastSuccessfulBuild/artifact/halium_halium_arm64.tar.xz"
+
+build() {
+	_gsi_image_path="$srcdir/system/var/lib/lxc/android/android-rootfs.img"
+	_raw_image="system.img.raw"
+
+	mv "$_gsi_image_path" "$srcdir/$_raw_image"
+
+	resize2fs -p -M "$srcdir/$_raw_image"
+}
+
+package() {
+	_raw_image="system.img.raw"
+	_install_path="$pkgdir/var/lib/lxc/android/system.img"
+
+	install -Dm644 "$srcdir/$_raw_image" "$_install_path"
+}
+sha512sums="
+78db8d5d60899834f294a2305e420e04df7a62e0652d593d5cf219b20294b14f8369bf66d14ecbf2671e19f7d7dbfa80b9e4350bbb15aa86dd05b6dd29afe8e2  halium_halium_arm64.tar.xz
+"

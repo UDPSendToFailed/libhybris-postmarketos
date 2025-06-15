@@ -1,0 +1,158 @@
+# Maintainer: Bardia Moshiri <fakeshell@bardia.tech>
+
+pkgname=libhybris
+pkgver=1.0_git20230409
+pkgrel=0
+arch="armhf armv7 aarch64"
+url="https://github.com/libhybris/libhybris.git"
+license="Apache-2.0"
+pkgdesc="libhybris allows to use bionic-based HW adaptations"
+_commit="9f61f26c44d9a3bf62efb67d4c32a7a0c89c21ca"
+makedepends="autoconf automake libtool wayland-dev linux-headers bsd-compat-headers
+	libx11-dev libxcb-dev libxext-dev android-headers-api29"
+
+depends_dev="bsd-compat-headers android-headers-api29"
+source="
+	$pkgname-$_commit.tar.gz::https://github.com/libhybris/libhybris/archive/$_commit.tar.gz
+	0001-Make-libhybris-compile-with-musl.patch
+	"
+
+_base_subpackages="$pkgname-dev
+	$pkgname-dbg
+	$pkgname-egl
+	$pkgname-gles"
+
+subpackages="$_base_subpackages
+	$pkgname-tests:_specific"
+
+options="!check !strip !tracedeps"
+replaces="vulkan-loader vulkan-loader-dev"
+builddir="$srcdir/$pkgname-$_commit"
+_tmppkgdir="$srcdir/tmpinstall"
+
+_bins_specific="test_audio test_camera test_egl_configs	test_gps
+	test_hwcomposer test_input test_lights test_media test_nfc
+	test_recorder test_sensors test_sf test_vibrator test_wifi"
+
+_libs_specific="libcamera.so.1.0.0 libhardware.so.2.0.0
+	libhybris-common.so.1.0.0 libhybris-eglplatformcommon.so.1.0.0
+	libhybris-hwcomposerwindow.so.1.0.0 libis.so.1.0.0 libmedia.so.1
+	libmedia.so.1.0.0 libnfc_ndef_nxp.so.1.0.0 libnfc_nxp.so.1.0.0
+	libsf.so.1.0.0 libsync.so.2.0.0 libui.so.1.0.0 libvibrator.so.1.0.0
+	libwifi.so.1.0.0
+	libhybris/eglplatform_fbdev.so libhybris/eglplatform_hwcomposer.so
+	libhybris/eglplatform_null.so libhybris/eglplatform_wayland.so"
+
+build() {
+    export CPPFLAGS="-D_LARGEFILE64_SOURCE"
+
+	cd "$builddir/hybris"
+
+	NOCONFIGURE=1 ./autogen.sh
+
+	if [ "$CARCH" == "armhf" -o "$CARCH" == "armv7" ]; then
+		_ldpath="/usr/libexec/droid-hybris/system/lib:/vendor/lib:/system/lib:/system/lib/vndk-28:/system/lib/vndk-29:/system/lib/vndk-30:/vendor/lib/egl"
+		_arch="arm"
+		_enable_quirks="--enable-mali-quirks \
+				--enable-adreno-quirks"
+	elif [ "$CARCH" == "aarch64" ]; then
+		_ldpath="/usr/libexec/droid-hybris/system/lib64:/vendor/lib64:/system/lib64:/system/lib64/vndk-28:/system/lib64/vndk-29:/system/lib64/vndk-30:/vendor/lib64/egl"
+		_arch="arm64"
+		_enable_quirks="--enable-mali-quirks \
+				--enable-adreno-quirks"
+	elif [ "$CARCH" == "x86" ]; then
+		_ldpath="/usr/libexec/droid-hybris/system/lib:/vendor/lib:/system/lib"
+		_arch="x86"
+	fi
+
+	msg "building $pkgname"
+	./configure \
+		--prefix=/usr \
+		--enable-wayland \
+		--enable-trace \
+		--enable-debug \
+		--enable-experimental \
+		--with-android-headers=/usr/include/android \
+		--with-default-hybris-ld-library-path=$_ldpath \
+		--enable-arch=$_arch \
+		$_enable_quirks \
+		--enable-property-cache
+
+	make clean
+	make -j32
+	make DESTDIR="$_tmppkgdir/$pkgname" install
+}
+
+package() {
+	cd "$builddir/hybris"
+
+	mkdir -p "$pkgdir"
+	cp -a "$_tmppkgdir"/"$pkgname"/* "$pkgdir"
+
+	for _bin in $_bins_specific; do
+		rm "$pkgdir/usr/bin/$_bin" || true
+	done
+
+	for _lib in $_libs_specific; do
+		rm "$pkgdir/usr/lib/$_lib"
+	done
+}
+
+_specific() {
+    pkgdesc="Test programs for libhybris"
+	depends="$pkgname=$pkgver-r$pkgrel"
+
+	for _bin in $_bins_specific; do
+		install -Dm755 "$_tmppkgdir/$pkgname/usr/bin/$_bin" \
+			"$subpkgdir/usr/bin/$_bin" || true
+	done
+
+	for _lib in $_libs_specific; do
+		install -Dm755 "$_tmppkgdir/$pkgname/usr/lib/$_lib" \
+			"$subpkgdir/usr/lib/$_lib"
+	done
+}
+
+egl() {
+	depends="$pkgname"
+	pkgdesc="libhybris libEGL runtime libraries"
+	install="$subpkgname.post-install"
+
+	install -d "$subpkgdir"/usr/lib/libhybris-egl
+	mv "$pkgdir"/usr/lib/libEGL.so.* \
+		"$subpkgdir"/usr/lib/libhybris-egl/
+}
+
+gles() {
+	depends="$pkgname"
+	pkgdesc="libhybris libGLESv2 runtime libraries"
+	install -d "$subpkgdir"/usr/lib/libhybris-egl
+	mv "$pkgdir"/usr/lib/libGLES*.so.* \
+		"$subpkgdir"/usr/lib/libhybris-egl/
+}
+
+dev() {
+	default_dev
+
+	# Avoid conflicts with mesa-dev
+	install -d "$subpkgdir"/usr/lib/libhybris-egl
+
+	mv "$subpkgdir"/usr/lib/lib*GL*.so "$subpkgdir"/usr/lib/libhybris-egl
+
+	cd "$subpkgdir"/usr/lib/pkgconfig
+	rm -f egl.pc glesv*.pc
+
+	cd "$subpkgdir"/usr/include
+	# Move libhybris-provided headers into hybris dir
+	mv CL EGL GLES GLES2 GLES3 KHR hybris
+
+	# Symlink eglhybris.h
+	mkdir -p EGL
+	cd EGL
+	ln -s ../hybris/EGL/eglhybris.h .
+}
+
+sha512sums="
+7985c9405eeff812a63c3f2cb6e3115c8a45a81b30f8c83da47ca992b15ba40101bd98e7a7a7f9f822f89b740ed40ce46606c8efe2bb39b98695553b29d2bfe6  libhybris-9f61f26c44d9a3bf62efb67d4c32a7a0c89c21ca.tar.gz
+d2797c86ed558449025a8a0647be34e117d81f542ebc2249610ec3ae2105cd352b2708fcb0efd14b5738ab371bcb3d8259ecfccddce571f989eaf902c2e54979  0001-Make-libhybris-compile-with-musl.patch
+"
