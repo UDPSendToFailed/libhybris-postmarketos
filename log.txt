@@ -1,0 +1,92 @@
+X.Org X Server 1.21.1.16
+X Protocol Version 11, Revision 0
+Current Operating System: Linux samsung-gta2xlwifi 3.18.140 #73 SMP PREEMPT 1970-01-01 aarch64
+Kernel command line: sched_enable_hmp=1 sched_enable_power_aware=1 noirqdebug nodebugmon console=null androidboot.hardware=qcom msm_rtb.filter=0x237 ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci lpm_levels.sleep_disabled=1 androidboot.selinux=permissive selinux=0 pmos_boot_uuid=e3542d93-ac52-4dc1-a5d3-1694461f163d pmos_root_uuid=781f8159-8d0f-493d-b38c-92f3c0ac59b2 pmos_rootfsopts=defaults androidboot.sec_atd.tty=/dev/ttyHSL0 sec_log=0x200000@0x85200000 sec_dbg=0x1ff000@0x85000000 androidboot.revision=5 androidboot.warranty_bit=1 androidboot.em.did=00b99865b793 androidboot.em.model=SM-T590 androidboot.em.status=0x0 sec_param_file_size=12582912 androidboot.im.param.offset=11534384 androidboot.me.param.offset=11534464 androidboot.sn.param.offset=11534544 androidboot.pr.param.offset=11534624 androidboot.sku.param.offset=11534704 androidboot.prototype.param.offset=11535472 androidboot.carrierid.param.offset=11535452 androidboot.sales.param.offset=11535456 androidboot.carrierid= androidboot.sales_code=NEE androidboot.bootloader=T590XXU3CVG5 androidboot.boot_recovery=0 androidboot.hmac_mismatch=0 softdog.soft_margin=100 softdog.soft_panic=1 sec_debug.reset_reason=0x7 sec_dbg_ex_info=0xfc0@0x851ff000 androidboot.force_upload=0x0 normal_off=1 charging_mode=0x30 ccic_info=1 androidboot.debug_level=0x4f4c sec_debug.enable=0 sec_debug.enable_user=0 msm_rtb.enable=1 androidboot.cp_debug_level=0x55FF sec_debug.enable_cp_debug=0 androidboot.cp_reserved_mem=off vmalloc=380M uart_dbg=0 factory_mode=0 fg_reset=0 androidboot.ucs_mode=0 androidboot.ddr_start_type=4 androidboot.sku_theme= androidboot.skutheme_offset=11535416 androidboot.security_mode=1526595584 androidboot.dram_info=01,06,00,3G androidboot.usrf=11535468 androidboot.product.model=SM-T590 androidboot.emmc=true androidboot.baseband=apq lcd_id=0x0 lcd_id2=0x0 hall_ic=0x0 mdss_mdp.panel=1:dsi:0:ss_dsi_panel_HX8279_TV101WUM_WUXGA:1:none:cfg:single_dsi
+
+Current version of pixman: 0.46.0
+        Before reporting problems, check http://wiki.x.org
+        to make sure that you have the latest version.
+Markers: (--) probed, (**) from config file, (==) default setting,
+        (++) from command line, (!!) notice, (II) informational,
+        (WW) warning, (EE) error, (NI) not implemented, (??) unknown.
+(==) Log file: "/var/log/Xorg.0.log", Time: Sun Jun 15 20:46:20 2025
+(==) Using config directory: "/etc/X11/xorg.conf.d"
+(==) Using system config directory "/usr/share/X11/xorg.conf.d"
+(==) No Layout section.  Using the first Screen section.
+(==) No screen section available. Using defaults.
+(**) |-->Screen "Default Screen Section" (0)
+(**) |   |-->Monitor "<default monitor>"
+(==) No device specified for screen "Default Screen Section".
+        Using the first device section listed.
+(**) |   |-->Device "Card0"
+(==) No monitor specified for screen "Default Screen Section".
+        Using a default monitor configuration.
+(**) Allowing byte-swapped clients
+(==) Automatically adding devices
+(==) Automatically enabling devices
+(==) Automatically adding GPU devices
+(==) Automatically binding GPU devices
+(==) Max clients allowed: 256, resource mask: 0x1fffff
+(WW) The directory "/usr/share/fonts/TTF" does not exist.
+        Entry deleted from font path.
+(WW) The directory "/usr/share/fonts/Type1" does not exist.
+        Entry deleted from font path.
+(==) FontPath set to:
+        /usr/share/fonts/misc,
+        /usr/share/fonts/100dpi:unscaled,
+        /usr/share/fonts/75dpi:unscaled
+(==) ModulePath set to "/usr/lib/xorg/modules"
+(II) The server relies on udev to provide the list of input devices.
+        If no devices become available, reconfigure udev or disable AutoAddDevices.
+(II) Module ABI versions:
+        X.Org ANSI C Emulation: 0.4
+        X.Org Video Driver: 25.2
+        X.Org XInput driver : 24.4
+        X.Org Server Extension : 10.0
+(II) no primary bus or device found
+(II) "glx" will be loaded by default.
+(II) LoadModule: "drihybris"
+(II) Loading /usr/lib/xorg/modules/libdrihybris.so
+(II) Module drihybris: vendor="X.Org Foundation"
+        compiled for 1.21.1.16, module version = 1.0.0
+        ABI class: X.Org ANSI C Emulation, version 0.4
+(II) LoadModule: "glamoreglhybris"
+(II) Loading /usr/lib/xorg/modules/libglamoreglhybris.so
+(II) Module glamoreglhybris: vendor="X.Org Foundation"
+        compiled for 1.21.1.16, module version = 1.0.0
+        ABI class: X.Org ANSI C Emulation, version 0.4
+(II) LoadModule: "glx"
+(II) Loading /usr/lib/xorg/modules/extensions/libglx.so
+(II) Module glx: vendor="X.Org Foundation"
+        compiled for 1.21.1.16, module version = 1.0.0
+        ABI class: X.Org Server Extension, version 10.0
+(II) LoadModule: "hwcomposer"
+(II) Loading /usr/lib/xorg/modules/drivers/hwcomposer_drv.so
+(II) Module hwcomposer: vendor="X.Org Foundation"
+        compiled for 1.21.1.16, module version = 0.3.8
+        Module class: X.Org Video Driver
+        ABI class: X.Org Video Driver, version 25.2
+(II) hwcomposer: Driver for Android devices with HWComposser API:
+        hwcomposer
+(WW) Falling back to old probe method for hwcomposer
+(WW) VGA arbiter: cannot open kernel arbiter, no multi-card support
+(II) hwcomposer(0): Creating default Display subsection in Screen section
+        "Default Screen Section" for depth/fbbpp 24/32
+(==) hwcomposer(0): Depth 24, (--) framebuffer bpp 32
+(==) hwcomposer(0): RGB weight 888
+(==) hwcomposer(0): Default visual is TrueColor
+(==) hwcomposer(0): Using gamma correction (1.0, 1.0, 1.0)
+(DB) xf86MergeOutputClassOptions unsupported bus type 0
+(II) hwcomposer(0): == hwcomposer module ==
+(II) hwcomposer(0):  * Address: 0x7fa24f7008
+(II) hwcomposer(0):  * Module API Version: 3
+(II) hwcomposer(0):  * HAL API Version: 0
+(II) hwcomposer(0):  * Identifier: hwcomposer
+(II) hwcomposer(0):  * Name: QTI Hardware Composer Module
+(II) hwcomposer(0):  * Author: CodeAurora Forum
+(II) hwcomposer(0): == hwcomposer module ==
+
+...
+
+After this, it hangs forever, can only be killed with killall -9 Xorg 
+More info in strace.txt
